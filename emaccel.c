@@ -3,31 +3,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <time.h>
-
-typedef struct{
-  size_t l;
-  double *F_em1;
-  double *F_em2;
-  double *F_diff1;
-  double *F_diff2;
-  double *F_diff3;
-  double *F_tmp;
-  double stepMax;
-}emaccl_internal;
-
-
-typedef struct{
-  emaccl_internal *internal;//keeps track of internal variable and allocations
-  double (*llhFP)(double *,void *);//llh function. Log likelihood. This should be >0. and we seek the parameters that minimizes this function.
-  int (*emstepFP)(double *,void*,double*);//function that returns the next guess.
-  int verbose;//should we printout stuff
-  double ttol;//tolerance used in accelerated em
-  double tole;//tolerance used for difference in llh values
-  double l;//dimension of parameterspase
-  double type;//type=0 normal em, type=1 accelerated em.
-  double maxIter;
-}emaccl_pars;
-
+#include "emaccel.h"
 
 emaccl_internal *emaccl_internal_alloc(int ndim){
   emaccl_internal *ret =(emaccl_internal*) malloc(sizeof(emaccl_internal)); 
@@ -220,20 +196,18 @@ int em1(double *sfs,void *vpp,void *vp){
   return it;
 }
 
-
-void mean(int *obs,int n){
- double s=0;
-  for(int i=0;i<n;i++)
-    s+=obs[i];
-  fprintf(stderr,"est:%f\n",s/(1.0*n));
-}
-
+#if __WITH_MAIN__
 
 double *simdata(double f,int n,double errate,int dep){
   int *obs=(int*)malloc(n*sizeof(int));
   for(int i=0;i<n;i++)
     obs[i]=drand48()<=f?1:0;
-  mean(obs,n);
+
+  double s=0;
+  for(int i=0;i<n;i++)
+    s+=obs[i];
+  fprintf(stderr,"est:%f\n",s/(1.0*n));
+  
 
   double *ret =(double *)malloc(2*n*sizeof(double));
   for(int i=0;i<n;i++){
@@ -328,3 +302,5 @@ int main(){
   emaccl_pars_free(ep);
   return 0;
 }
+
+#endif
