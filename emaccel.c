@@ -42,11 +42,21 @@ emaccl_internal *emaccl_internal_alloc(int ndim){
   return ret;
 }
 
+void emaccl_internal_free(emaccl_internal* ei){
+  free(ei->F_em1);
+  free(ei->F_em2);
+  free(ei->F_diff1);
+  free(ei->F_diff2);
+  free(ei->F_diff2);
+  free(ei->F_tmp);
+  free(ei);
+  ei=NULL;
+}
 emaccl_pars *emaccl_pars_alloc(int ndim){
   emaccl_pars *ep =(emaccl_pars*) malloc(sizeof(emaccl_pars));
   ep->internal = emaccl_internal_alloc(ndim);
-  ep->ttol=1e-9;
-  ep->tole=1e-6;
+  ep->ttol=1e-12;
+  ep->tole=1e-12;
   ep->l=ndim;
   ep->type=1;
   ep->maxIter = 100;
@@ -54,6 +64,11 @@ emaccl_pars *emaccl_pars_alloc(int ndim){
   ep->emstepFP=NULL;
   ep->verbose=100;
   return ep;
+}
+
+void emaccl_part_free(emaccl_pars *ep){
+  emaccl_internal_free(ep->internal);
+  ep=NULL;
 }
 
 void minus(double *fst,double *sec,double *res,int l){
@@ -219,10 +234,10 @@ double *simdata(double f,int n,double errate,int dep){
   mean(obs,n);
 
   double *ret =(double *)malloc(2*n*sizeof(double));
-   for(int i=0;i<n;i++){
+  for(int i=0;i<n;i++){
     double *persite=ret+2*i;
     persite[0]=persite[1]=0;
-
+    
     int md = lrand48() % dep;
     //    fprintf(stderr,"%d/%d\n",md,dep );
     for(int d=0;d<md;d++){
@@ -241,7 +256,7 @@ double *simdata(double f,int n,double errate,int dep){
       persite[0]-=mmax;persite[1]-=mmax;
     }
   }
- 
+  free(obs);
   return ret;;
 }
 
@@ -277,7 +292,7 @@ int main(){
   clock_t t=clock();
   time_t t2=time(NULL);
   double f=0.000018;
-  double err = 0.025;
+  double err = 0.005;
   int dep =3;
   int n=10000000;
   double *d=simdata(f,n,err,dep);
@@ -289,12 +304,12 @@ int main(){
   fprintf(stderr,"(%f,%f):llh1:%f\n",start[0],start[1],oldlik);
 
   emaccl_pars *ep=emaccl_pars_alloc(2);
-  ep->verbose=1;ep->maxIter=2000;
+  ep->verbose=1;ep->maxIter=500;
   ep->llhFP=llh;
   ep->emstepFP=emstep;
   ep->type =1;
   em1(start,ep,&tp);
-
+  fprintf(stderr,"val:%f %f\n",start[0],start[1]);
   fprintf(stderr, "\t[ALL done] cpu-time used =  %.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
   fprintf(stderr, "\t[ALL done] walltime used =  %.2f sec\n", (float)(time(NULL) - t2));  
 
@@ -304,8 +319,9 @@ int main(){
   start[0]=start[1]=0.5;
   ep->type =0;
   em1(start,ep,&tp);
+  fprintf(stderr,"val:%f %f\n",start[0],start[1]);
   fprintf(stderr, "\t[ALL done] cpu-time used =  %.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
   fprintf(stderr, "\t[ALL done] walltime used =  %.2f sec\n", (float)(time(NULL) - t2));  
-      
+  free(d);
   return 0;
 }
