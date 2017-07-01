@@ -47,7 +47,7 @@ void emaccl_internal_free(emaccl_internal* ei){
   free(ei->F_em2);
   free(ei->F_diff1);
   free(ei->F_diff2);
-  free(ei->F_diff2);
+  free(ei->F_diff3);
   free(ei->F_tmp);
   free(ei);
   ei=NULL;
@@ -59,15 +59,16 @@ emaccl_pars *emaccl_pars_alloc(int ndim){
   ep->tole=1e-12;
   ep->l=ndim;
   ep->type=1;
-  ep->maxIter = 100;
+  ep->maxIter = 5;
   ep->llhFP=NULL;
   ep->emstepFP=NULL;
   ep->verbose=100;
   return ep;
 }
 
-void emaccl_part_free(emaccl_pars *ep){
+void emaccl_pars_free(emaccl_pars *ep){
   emaccl_internal_free(ep->internal);
+  free(ep);
   ep=NULL;
 }
 
@@ -215,6 +216,7 @@ int em1(double *sfs,void *vpp,void *vp){
       oldLik=lik;
     }
   }
+  free(tmp);
   return it;
 }
 
@@ -294,7 +296,7 @@ int main(){
   double f=0.000018;
   double err = 0.005;
   int dep =3;
-  int n=10000000;
+  int n=1000;
   double *d=simdata(f,n,err,dep);
 
   double start[2] = {0.5,0.5};
@@ -323,5 +325,6 @@ int main(){
   fprintf(stderr, "\t[ALL done] cpu-time used =  %.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
   fprintf(stderr, "\t[ALL done] walltime used =  %.2f sec\n", (float)(time(NULL) - t2));  
   free(d);
+  emaccl_pars_free(ep);
   return 0;
 }
