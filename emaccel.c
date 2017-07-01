@@ -30,20 +30,20 @@ typedef struct{
 
 
 emaccl_internal *emaccl_internal_alloc(int ndim){
-  emaccl_internal *ret = malloc(sizeof(emaccl_internal)); 
+  emaccl_internal *ret =(emaccl_internal*) malloc(sizeof(emaccl_internal)); 
   ret->l=ndim;
-  ret->F_em1 = malloc(ret->l*sizeof(double));
-  ret->F_em2 = malloc(ret->l*sizeof(double));
-  ret->F_diff1 = malloc(ret->l*sizeof(double));
-  ret->F_diff2 = malloc(ret->l*sizeof(double));
-  ret->F_diff3 = malloc(ret->l*sizeof(double));
-  ret->F_tmp = malloc(ret->l*sizeof(double));
+  ret->F_em1 =(double*) malloc(ret->l*sizeof(double));
+  ret->F_em2 =(double*) malloc(ret->l*sizeof(double));
+  ret->F_diff1 =(double*) malloc(ret->l*sizeof(double));
+  ret->F_diff2 =(double*) malloc(ret->l*sizeof(double));
+  ret->F_diff3 =(double*) malloc(ret->l*sizeof(double));
+  ret->F_tmp =(double*) malloc(ret->l*sizeof(double));
   ret->stepMax=1;
   return ret;
 }
 
 emaccl_pars *emaccl_pars_alloc(int ndim){
-  emaccl_pars *ep = malloc(sizeof(emaccl_pars));
+  emaccl_pars *ep =(emaccl_pars*) malloc(sizeof(emaccl_pars));
   ep->internal = emaccl_internal_alloc(ndim);
   ep->ttol=1e-9;
   ep->tole=1e-6;
@@ -124,6 +124,7 @@ int emAccel(double *F,void *vp,double *F_new,emaccl_pars *ep){
     fprintf(stderr,"outofparspace will use second emstep as jump instead\n");
     for(int i=0;i<ep->l;i++)
       F_new[i] = F_em2[i];
+    *stepMax = 1;
     return 1;
   }
     
@@ -152,7 +153,7 @@ int emAccel(double *F,void *vp,double *F_new,emaccl_pars *ep){
 
 
 int em1(double *sfs,void *vpp,void *vp){
-  emaccl_pars *ep = vpp;
+  emaccl_pars *ep =(emaccl_pars*) vpp;
   assert(ep->llhFP);assert(ep->emstepFP);
   double oldLik,lik;
   oldLik = ep->llhFP(sfs,vp);
@@ -165,7 +166,7 @@ int em1(double *sfs,void *vpp,void *vp){
   }
 
 
-  double *tmp =malloc(ep->l*sizeof(double));
+  double *tmp =(double*)malloc(ep->l*sizeof(double));
   int it;
   for(it=0;it<ep->maxIter;it++) {
     if(ep->type==0)
@@ -212,7 +213,7 @@ void mean(int *obs,int n){
 
 
 double *simdata(double f,int n,double errate,int dep){
-  int *obs=malloc(n*sizeof(int));
+  int *obs=(int*)malloc(n*sizeof(int));
   for(int i=0;i<n;i++)
     obs[i]=drand48()<=f?1:0;
   mean(obs,n);
