@@ -12,6 +12,7 @@ typedef struct{
   double *F_diff2;
   double *F_diff3;
   double *F_tmp;
+  double stepMax;
 }emaccl_internal;
 
 
@@ -28,32 +29,6 @@ typedef struct{
 }emaccl_pars;
 
 
-typedef struct{
-  int n;
-  double *d;
-}testp;
-
-
-double llh(double *f,void *vp){
-  testp *p =(testp*) vp;
-  double llh=0;
-  for(int i=0;i<p->n;i++)
-    llh += log( f[0]*exp(p->d[i*2])+(f[1])*exp(p->d[i*2+1]));
-  return -llh;
-}
-
-int emstep(double *pre,void *vp,double *post){
-  testp *p =(testp*) vp;
-  double f2=0;
-   for(int i=0;i<p->n;i++)
-     f2 += pre[0]*exp(p->d[i*2])/(pre[0]*exp(p->d[i*2])+pre[1]*exp(p->d[2*i+1]));
-   post[0] = f2/(1.0*p->n);
-   post[1] = 1-post[0];
-   //   fprintf(stderr,"diff1:%e\n",1-post[0]-post[1]);
-   return 0;
-}
-
-
 emaccl_internal *emaccl_internal_alloc(int ndim){
   emaccl_internal *ret = malloc(sizeof(emaccl_internal)); 
   ret->l=ndim;
@@ -63,6 +38,7 @@ emaccl_internal *emaccl_internal_alloc(int ndim){
   ret->F_diff2 = malloc(ret->l*sizeof(double));
   ret->F_diff3 = malloc(ret->l*sizeof(double));
   ret->F_tmp = malloc(ret->l*sizeof(double));
+  ret->stepMax=1;
   return ret;
 }
 
@@ -87,7 +63,7 @@ void minus(double *fst,double *sec,double *res,int l){
 
 double sumSquare(double *mat, int l){
   double tmp=0;
-  for(size_t i=0;i<3;i++){
+  for(size_t i=0;i<l;i++){
     //    fprintf(stderr,"%f \n",mat[i]);
     tmp += mat[i]*mat[i];
   }
@@ -97,14 +73,10 @@ double sumSquare(double *mat, int l){
 
 
 int emAccel(double *F,void *vp,double *F_new,emaccl_pars *ep){
-  //  fprintf(stderr,"calling emaccel \n");
-  // double ttol=0.0000001;
-
   //  fprintf(stderr,"tol:%f\n",tol);
-  //maybe these should be usersettable?
+
   double stepMin =1;
-  const   double stepMax0 = 1;
-  static double stepMax=stepMax0;
+  double *stepMax=&ep->internal->stepMax;
   double mstep=4;
   //  double objfnInc=1;
 
@@ -117,15 +89,14 @@ int emAccel(double *F,void *vp,double *F_new,emaccl_pars *ep){
   double *F_tmp=ep->internal->F_tmp;
 
   ep->emstepFP(F,vp,F_em1);
-  // stayin(F_em1);
   minus(F_em1,F,F_diff1,ep->l);
   double sr2 = sumSquare(F_diff1,ep->l);
   
   if(sqrt(sr2)<ep->ttol){
     fprintf(stderr,"sr2 break:%f\n",sr2);
     return 0;
-    //break;
   }
+
   ep->emstepFP(F_em1,vp,F_em2);
   minus(F_em2,F_em1, F_diff2,ep->l);
 
@@ -133,17 +104,14 @@ int emAccel(double *F,void *vp,double *F_new,emaccl_pars *ep){
   if(sqrt(sq2)<ep->ttol){
     fprintf(stderr,"sq2\n");
     return 0;
-    //    break;
   }
 
-
   minus(F_diff2,F_diff1, F_diff3,ep->l);
-  
   double sv2 = sumSquare(F_diff3,ep->l);
   
   double alpha = sqrt(sr2/sv2);
-  double mmin=stepMax<alpha?stepMax:alpha;
-  alpha =stepMin>mmin?stepMin:mmin;// ;std::max(stepMin,std::min(stepMax,alpha));
+  double mmin=*stepMax<alpha?*stepMax:alpha;
+  alpha =stepMin>mmin?stepMin:mmin;// ;std::max(stepMin,std::min(*stepMax,alpha));
   for(size_t i=0;i<ep->l;i++)
     F_new[i] = F[i]+2*alpha*F_diff1[i]+alpha*alpha*F_diff3[i];
   //  fprintf(stderr,"F_new (this the linear jump: (%f,%f)\n",F_new[0],F_new[1]);
@@ -153,7 +121,7 @@ int emAccel(double *F,void *vp,double *F_new,emaccl_pars *ep){
       outofparspace++;
   }
   if(outofparspace){
-    fprintf(stderr,"outofparspace will use second emstep as jump\n");
+    fprintf(stderr,"outofparspace will use second emstep as jump instead\n");
     for(int i=0;i<ep->l;i++)
       F_new[i] = F_em2[i];
     return 1;
@@ -170,14 +138,14 @@ int emAccel(double *F,void *vp,double *F_new,emaccl_pars *ep){
   }
 
   //  double lnew = 1;
-  if ((alpha - stepMax) > -0.001) {
-    stepMax = mstep*stepMax;
-  }
-  //  print(stderr,3,F_new);
-  //  fprintf(stderr,"alpha %f stepMax %f\n",alpha,stepMax);
+  if ((alpha - *stepMax) > -0.001) 
+    *stepMax = mstep**stepMax;
 
-  // fprintf(stderr,"calling emaccel \n");
-  // fprintf(stderr,"F_new:(%f,%f,%f)\n",F_new[0],F_new[1],F_new[2]);
+  
+  //  print(stderr,3,F_new);
+  if(ep->verbose>1)
+    fprintf(stderr,"\t-> alpha %f stepMax %f\n",alpha,*stepMax);
+
   return 1;
 }
 
@@ -193,8 +161,9 @@ int em1(double *sfs,void *vpp,void *vp){
     for(int i=0;i<ep->l;i++)
       fprintf(stderr,"\t%f",sfs[i]);
     fprintf(stderr,"\n");
+    fflush(stderr);
   }
-  fflush(stderr);
+
 
   double *tmp =malloc(ep->l*sizeof(double));
   int it;
@@ -218,7 +187,7 @@ int em1(double *sfs,void *vpp,void *vp){
       fprintf(stderr,"\t-> New likelihood from EM-step is worse, assuming optima has been achieved and we are observing an issue of numerical stability\n");
       break;
     }else{
-      for(int i=0;i<3;i++)
+      for(int i=0;i<ep->l;i++)
 	sfs[i]= tmp[i];
       assert(lik<=oldLik);
       if(lik-oldLik==0||fabs(lik-oldLik)<ep->tole){
@@ -275,18 +244,43 @@ double *simdata(double f,int n,double errate,int dep){
   return ret;;
 }
 
+typedef struct{
+  int n;
+  double *d;
+}testp;
+
+
+double llh(double *f,void *vp){
+  testp *p =(testp*) vp;
+  double llh=0;
+  for(int i=0;i<p->n;i++)
+    llh += log( f[0]*exp(p->d[i*2])+(f[1])*exp(p->d[i*2+1]));
+  return -llh;
+}
+
+int emstep(double *pre,void *vp,double *post){
+  testp *p =(testp*) vp;
+  double f2=0;
+   for(int i=0;i<p->n;i++)
+     f2 += pre[0]*exp(p->d[i*2])/(pre[0]*exp(p->d[i*2])+pre[1]*exp(p->d[2*i+1]));
+   post[0] = f2/(1.0*p->n);
+   post[1] = 1-post[0];
+   //   fprintf(stderr,"diff1:%e\n",1-post[0]-post[1]);
+   return 0;
+}
+
+
+
+
 int main(){
   clock_t t=clock();
   time_t t2=time(NULL);
-
   double f=0.000018;
   double err = 0.025;
   int dep =3;
   int n=10000000;
   double *d=simdata(f,n,err,dep);
-  for(int i=0;0&&i<n;i++)
-    fprintf(stdout,"%f\t%f\n",d[i*2],d[i*2+1]);
-  fflush(stdout);
+
   double start[2] = {0.5,0.5};
   testp tp;
   tp.d=d;tp.n=n;
@@ -294,9 +288,10 @@ int main(){
   fprintf(stderr,"(%f,%f):llh1:%f\n",start[0],start[1],oldlik);
 
   emaccl_pars *ep=emaccl_pars_alloc(2);
+  ep->verbose=1;ep->maxIter=2000;
   ep->llhFP=llh;
   ep->emstepFP=emstep;
-  ep->type =0;
+  ep->type =1;
   em1(start,ep,&tp);
 
   fprintf(stderr, "\t[ALL done] cpu-time used =  %.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
@@ -306,7 +301,7 @@ int main(){
   t2=time(NULL);
 
   start[0]=start[1]=0.5;
-  ep->type =1;
+  ep->type =0;
   em1(start,ep,&tp);
   fprintf(stderr, "\t[ALL done] cpu-time used =  %.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
   fprintf(stderr, "\t[ALL done] walltime used =  %.2f sec\n", (float)(time(NULL) - t2));  
